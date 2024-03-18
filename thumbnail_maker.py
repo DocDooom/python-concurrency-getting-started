@@ -1,4 +1,5 @@
 # thumbnail_maker.py
+import threading
 import time
 import os
 import logging
@@ -10,18 +11,35 @@ from PIL import Image
 
 logging.basicConfig(filename='logfile.log', level=logging.DEBUG)
 
+
 class ThumbnailMakerService(object):
     def __init__(self, home_dir='.'):
         self.home_dir = home_dir
         self.input_dir = self.home_dir + os.path.sep + 'incoming'
         self.output_dir = self.home_dir + os.path.sep + 'outgoing'
+        self.downloaded_bytes = 0
+        self.dl_lock = threading.Lock()
+
+    def download_image(self, url):
+        # download each image and save to the input dir
+        logging.info("downloading image at URL " + url)
+
+        img_filename = urlparse(url).path.split('/')[-1]
+        dest_path = self.input_dir + os.path.sep + img_filename
+        urlretrieve(url, dest_path)
+        self.downloaded_bytes += len(url)
+        img_size = os.path.getsize(dest_path)
+        with self.dl_lock:
+            self.downloaded_bytes += img_size
+        logging.info(f"image [{img_size} bytes] saved to {dest_path}")
+        print(f"image [{img_size} bytes] saved to {dest_path}")
 
     def download_images(self, img_url_list):
         # validate inputs
         if not img_url_list:
             return
         os.makedirs(self.input_dir, exist_ok=True)
-        
+
         logging.info("beginning image downloads")
 
         start = time.perf_counter()
@@ -53,10 +71,10 @@ class ThumbnailMakerService(object):
                 hsize = int((float(img.size[1]) * float(wpercent)))
                 # perform resizing
                 img = img.resize((basewidth, hsize), PIL.Image.LANCZOS)
-                
+
                 # save the resized image to the output dir with a modified file name 
                 new_filename = os.path.splitext(filename)[0] + \
-                    '_' + str(basewidth) + os.path.splitext(filename)[1]
+                               '_' + str(basewidth) + os.path.splitext(filename)[1]
                 img.save(self.output_dir + os.path.sep + new_filename)
 
             os.remove(self.input_dir + os.path.sep + filename)
@@ -73,4 +91,8 @@ class ThumbnailMakerService(object):
 
         end = time.perf_counter()
         logging.info("END make_thumbnails in {} seconds".format(end - start))
-    
+
+
+if __name__ == "__main__":
+    tn_maker = ThumbnailMakerService()
+    tn_maker.download_image('https://dl.dropboxusercontent.com/s/2fu69d8lfesbhru/pexels-photo-48603.jpeg')
