@@ -6,3 +6,7 @@ incoming
 outgoing
 staging
 
+venv
+
+/.DS_Store
+
